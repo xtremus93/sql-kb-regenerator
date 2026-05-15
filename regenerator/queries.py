@@ -34,9 +34,16 @@ def _exec_in_db(
     """
     # The outer batch takes @db_name as a pyodbc ? parameter, builds a
     # dynamic SQL string that starts with USE [<db>], then executes it.
+    #
+    # Split into two SET statements and use CONVERT(NVARCHAR(MAX), ?) to force
+    # the correct type mapping. pyodbc can bind long strings as ntext on older
+    # SQL Server versions, and nvarchar + ntext concatenation fails with error
+    # 402 ("incompatible in the add operator").  CONVERT resolves that.
     outer = (
-        "DECLARE @_db NVARCHAR(128) = ?;\n"
-        "DECLARE @_sql NVARCHAR(MAX) = N'USE [' + @_db + N'];' + ?;\n"
+        "DECLARE @_db  NVARCHAR(128) = ?;\n"
+        "DECLARE @_sql NVARCHAR(MAX);\n"
+        "SET @_sql = N'USE [' + @_db + N'];';\n"
+        "SET @_sql = @_sql + CONVERT(NVARCHAR(MAX), ?);\n"
         "EXEC sp_executesql @_sql;"
     )
     cursor = conn.cursor()
@@ -266,9 +273,10 @@ SELECT
     sed.referenced_database_name                      AS ref_database_name,
     sed.referenced_schema_name                        AS ref_schema_name,
     sed.referenced_entity_name                        AS ref_object_name,
-    sed.is_cross_server                               AS is_cross_server,
+    CAST(CASE WHEN sed.referenced_server_name IS NOT NULL THEN 1 ELSE 0 END AS BIT)
+                                                      AS is_cross_server,
     CASE
-        WHEN sed.is_cross_server = 1 THEN
+        WHEN sed.referenced_server_name IS NOT NULL THEN
             LOWER(ISNULL(srv.data_source, sed.referenced_server_name))
         ELSE LOWER(@@SERVERNAME)
     END + '.'
@@ -356,9 +364,10 @@ SELECT
     sed.referenced_schema_name                        AS ref_schema_name,
     sed.referenced_entity_name                        AS ref_object_name,
     ISNULL(robj.type, 'UNKNOWN')                      AS ref_type_code,
-    sed.is_cross_server                               AS is_cross_server,
+    CAST(CASE WHEN sed.referenced_server_name IS NOT NULL THEN 1 ELSE 0 END AS BIT)
+                                                      AS is_cross_server,
     CASE
-        WHEN sed.is_cross_server = 1 THEN
+        WHEN sed.referenced_server_name IS NOT NULL THEN
             LOWER(ISNULL(srv.data_source, sed.referenced_server_name))
         ELSE LOWER(@@SERVERNAME)
     END + '.'
@@ -486,8 +495,9 @@ SELECT
     sed.referenced_schema_name,
     sed.referenced_entity_name,
     ISNULL(robj.type, 'UNKNOWN')                      AS ref_type_code,
-    sed.is_cross_server,
-    CASE WHEN sed.is_cross_server = 1
+    CAST(CASE WHEN sed.referenced_server_name IS NOT NULL THEN 1 ELSE 0 END AS BIT)
+                                                      AS is_cross_server,
+    CASE WHEN sed.referenced_server_name IS NOT NULL
          THEN LOWER(ISNULL(srv.data_source, sed.referenced_server_name))
          ELSE LOWER(@@SERVERNAME) END + '.'
     + LOWER(ISNULL(sed.referenced_database_name, DB_NAME())) + '.'
@@ -568,8 +578,9 @@ SELECT
     sed.referenced_schema_name,
     sed.referenced_entity_name,
     ISNULL(robj.type, 'UNKNOWN')                      AS ref_type_code,
-    sed.is_cross_server,
-    CASE WHEN sed.is_cross_server = 1
+    CAST(CASE WHEN sed.referenced_server_name IS NOT NULL THEN 1 ELSE 0 END AS BIT)
+                                                      AS is_cross_server,
+    CASE WHEN sed.referenced_server_name IS NOT NULL
          THEN LOWER(ISNULL(srv.data_source, sed.referenced_server_name))
          ELSE LOWER(@@SERVERNAME) END + '.'
     + LOWER(ISNULL(sed.referenced_database_name, DB_NAME())) + '.'
