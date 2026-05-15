@@ -357,7 +357,7 @@ ORDER BY proc_id, pa.parameter_id;
 
     d3 = _exec_in_db(conn, r"""
 SELECT
-    LOWER(@@SERVERNAME) + '.' + LOWER(DB_NAME()) + '.' + LOWER(rs.name) + '.' + LOWER(ro.name)
+    LOWER(@@SERVERNAME) + '.' + LOWER(DB_NAME()) + '.' + LOWER(rs.name) + '.' + LOWER(ro2.name)
                                                       AS referencing_id,
     sed.referenced_server_name                        AS ref_server_name,
     sed.referenced_database_name                      AS ref_database_name,
@@ -380,7 +380,7 @@ SELECT
     + sed.referenced_entity_name + ']'               AS referenced_fqn,
     srv.name                                          AS linked_server_alias,
     CASE
-        WHEN sed.is_cross_server = 1
+        WHEN sed.referenced_server_name IS NOT NULL
             AND EXISTS (SELECT 1 FROM sys.servers s2 WHERE s2.name = sed.referenced_server_name
                         AND s2.is_linked = 1)
         THEN 'linked_server'
