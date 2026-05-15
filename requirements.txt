@@ -1,0 +1,2 @@
+pyodbc>=4.0.39
+ruamel.yaml>=0.18.6
