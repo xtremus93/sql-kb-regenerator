@@ -124,9 +124,19 @@ def _read_optional(path: Path) -> str | None:
 
 
 def _build_linked_server_map(conn: pyodbc.Connection) -> dict[str, str]:
-    """Return {alias_upper -> real_server_lower} from sys.servers."""
+    """Return {alias_upper -> real_server_lower} from sys.servers.
+
+    Skips rows where data_source is NULL (e.g. local server entries or
+    linked servers configured without a data source).
+    """
     rows = queries.get_linked_servers(conn)
-    return {r["linked_server_alias"].upper(): r["real_server_address"].lower() for r in rows}
+    result = {}
+    for r in rows:
+        alias = r.get("linked_server_alias")
+        addr  = r.get("real_server_address")
+        if alias and addr:
+            result[alias.upper()] = addr.lower()
+    return result
 
 
 def _resolve_dep(
